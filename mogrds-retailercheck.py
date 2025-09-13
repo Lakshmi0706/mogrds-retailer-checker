@@ -5,24 +5,38 @@ import pandas as pd
 from googlesearch import search
 from urllib.parse import urlparse
 
-def get_unique_domain(description):
+# Define known retailer domains for accuracy
+KNOWN_RETAILERS = {
+    "dollartree.com": "Dollar Tree",
+    # Add more known retailers here if needed
+}
+
+def get_retailer_status(description):
     query = f"{description} USA"
     try:
         results = list(search(query, num_results=10))
         domains = set()
         for url in results:
             parsed = urlparse(url)
-            domain = parsed.netloc
+            domain = parsed.netloc.replace("www.", "")
             if domain:
                 domains.add(domain)
-        if len(domains) == 1:
-            return list(domains)[0], "Yes"
+
+        # Check for Dollar Tree specifically
+        dollar_tree_domains = [d for d in domains if "dollartree.com" in d]
+
+        if len(domains) == 1 and "dollartree.com" in list(domains)[0]:
+            return "Dollar Tree", "Yes"
+        elif len(dollar_tree_domains) == 1 and len(domains) == 1:
+            return "Dollar Tree", "Yes"
+        elif len(dollar_tree_domains) > 1:
+            return "Dollar Tree", "No"
         else:
             return "", "No"
     except Exception as e:
         return "", "No"
 
-st.title("Retailer Identification via Google Search (No API)")
+st.title("Retailer Identification via Google Search (Improved Accuracy)")
 uploaded_file = st.file_uploader("Upload a CSV or Excel file with a 'Description' column", type=["csv", "xlsx"])
 
 if uploaded_file:
@@ -39,7 +53,7 @@ if uploaded_file:
         statuses = []
 
         for desc in df["Description"]:
-            retailer, status = get_unique_domain(desc)
+            retailer, status = get_retailer_status(desc)
             retailer_names.append(retailer)
             statuses.append(status)
 
