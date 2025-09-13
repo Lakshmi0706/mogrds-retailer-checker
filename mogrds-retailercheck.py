@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from difflib import get_close_matches
 
 # Predefined known retailer domains
 KNOWN_RETAILERS = {
@@ -26,14 +27,17 @@ KNOWN_RETAILERS = {
 def clean_description(desc):
     return desc.lower().replace(" ", "").replace("-", "").replace(".", "")
 
-def match_retailer(cleaned_desc):
-    matched = [domain for domain in KNOWN_RETAILERS if cleaned_desc in domain.replace(".", "").lower()]
-    if len(matched) == 1:
-        return matched[0], "Yes"
-    else:
-        return "", "No"
+def fuzzy_match_retailer(cleaned_desc):
+    domain_keys = [domain.replace(".", "").lower() for domain in KNOWN_RETAILERS.keys()]
+    matches = get_close_matches(cleaned_desc, domain_keys, n=2, cutoff=0.8)
+    if len(matches) == 1:
+        matched_domain = matches[0]
+        for domain in KNOWN_RETAILERS:
+            if matched_domain == domain.replace(".", "").lower():
+                return domain, "Yes"
+    return "", "No"
 
-st.title("Retailer Identification from Description")
+st.title("Retailer Identification via Fuzzy Matching")
 
 uploaded_file = st.file_uploader("Upload a CSV or Excel file with a 'Description' column", type=["csv", "xlsx"])
 
@@ -54,7 +58,7 @@ if uploaded_file:
 
         for desc in df["Description"]:
             cleaned = clean_description(str(desc))
-            retailer, status = match_retailer(cleaned)
+            retailer, status = fuzzy_match_retailer(cleaned)
             retailer_names.append(retailer)
             statuses.append(status)
 
