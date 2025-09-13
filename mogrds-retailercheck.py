@@ -33,20 +33,22 @@ def match_retailer(cleaned_desc):
     else:
         return "", "No"
 
-st.title("Retailer Identification via Description Matching")
+st.title("Retailer Identification from Description")
 
 uploaded_file = st.file_uploader("Upload a CSV or Excel file with a 'Description' column", type=["csv", "xlsx"])
 
 if uploaded_file:
     if uploaded_file.name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
-    else:
+    elif uploaded_file.name.endswith(".xlsx"):
         df = pd.read_excel(uploaded_file, engine="openpyxl")
+    else:
+        st.error("Unsupported file format.")
+        st.stop()
 
     if "Description" not in df.columns:
         st.error("The file must contain a 'Description' column.")
     else:
-        st.write("Processing descriptions...")
         retailer_names = []
         statuses = []
 
