@@ -1,76 +1,59 @@
-import streamlit as st
+import requests
+from bs4 import BeautifulSoup
 import pandas as pd
-from difflib import get_close_matches
+import time
 
-# Predefined known retailer domains
-KNOWN_RETAILERS = {
-    "dollartree.com": "Dollar Tree",
-    "circlek.com": "Circle K",
-    "shell.com": "Shell",
-    "walmart.com": "Walmart",
-    "target.com": "Target",
-    "dollargeneral.com": "Dollar General",
-    "7-eleven.com": "7-Eleven",
-    "costco.com": "Costco",
-    "amazon.com": "Amazon",
-    "kroger.com": "Kroger",
-    "walgreens.com": "Walgreens",
-    "cvs.com": "CVS",
-    "aldi.us": "Aldi",
-    "riteaid.com": "Rite Aid",
-    "publix.com": "Publix",
-    "bestbuy.com": "Best Buy",
-    "lowes.com": "Lowe's",
-    "homedepot.com": "Home Depot"
+# List of descriptions
+descriptions = [
+    "SHELL FILL UP",
+    "E&H ACE RICHMOND HTS E&H ACE HARDWARE",
+    "THE HOME DRPCC",
+    "98 GAS N GO BUENA"
+]
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
-def clean_description(desc):
-    return desc.lower().replace(" ", "").replace("-", "").replace(".", "")
+def get_domains_from_google(query):
+    url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = soup.find_all("a")
 
-def fuzzy_match_retailer(cleaned_desc):
-    domain_keys = [domain.replace(".", "").lower() for domain in KNOWN_RETAILERS.keys()]
-    matches = get_close_matches(cleaned_desc, domain_keys, n=2, cutoff=0.8)
-    if len(matches) == 1:
-        matched_domain = matches[0]
-        for domain in KNOWN_RETAILERS:
-            if matched_domain == domain.replace(".", "").lower():
-                return domain, "Yes"
-    return "", "No"
+    domains = set()
+    for link in links:
+        href = link.get("href")
+        if href and "/url?q=" in href:
+            try:
+                domain = href.split("/url?q=")[1].split("&")[0].split("/")[2]
+                domains.add(domain)
+            except IndexError:
+                continue
+    return domains
 
-st.title("Retailer Identification via Fuzzy Matching")
+results = []
 
-uploaded_file = st.file_uploader("Upload a CSV or Excel file with a 'Description' column", type=["csv", "xlsx"])
+for desc in descriptions:
+    query = f"{desc} USA"
+    print(f"Searching for: {query}")
+    domains = get_domains_from_google(query)
+    time.sleep(2)  # polite delay to avoid being blocked
 
-if uploaded_file:
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    elif uploaded_file.name.endswith(".xlsx"):
-        df = pd.read_excel(uploaded_file, engine="openpyxl")
+    if len(domains) == 1:
+        retailer_name = list(domains)[0]
+        status = "Yes"
     else:
-        st.error("Unsupported file format.")
-        st.stop()
+        retailer_name = ", ".join(domains)
+        status = "No"
 
-    if "Description" not in df.columns:
-        st.error("The file must contain a 'Description' column.")
-    else:
-        retailer_names = []
-        statuses = []
+    results.append({
+        "Description": desc,
+        "Retailer Name": retailer_name,
+        "Status": status
+    })
 
-        for desc in df["Description"]:
-            cleaned = clean_description(str(desc))
-            retailer, status = fuzzy_match_retailer(cleaned)
-            retailer_names.append(retailer)
-            statuses.append(status)
-
-        df["Retailer Name"] = retailer_names
-        df["Status"] = statuses
-
-        st.success("Processing complete!")
-        st.dataframe(df)
-
-        @st.cache_data
-        def convert_df(df):
-            return df.to_csv(index=False).encode("utf-8")
-
-        csv = convert_df(df)
-        st.download_button("Download Updated File", csv, "updated_results.csv", "text/csv")
+# Save to CSV
+df = pd.DataFrame(results)
+df.to_csv("retailer_results.csv", index=False)
+print("Results saved to retailer_results.csv")
