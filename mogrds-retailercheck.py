@@ -11,22 +11,23 @@ def extract_domain(url):
     except:
         return ""
 
-def is_exact_match(description, domains):
+def is_unique_retailer(description, domains):
     desc_clean = description.lower().replace(" ", "").replace("-", "")
-    matched = [d for d in domains if desc_clean in d.replace(".", "").lower()]
-    return matched[0] if len(matched) == 1 else ""
+    matched_domains = [d for d in domains if desc_clean in d.replace(".", "").lower()]
+    
+    # If only one domain matches the cleaned description exactly
+    if len(matched_domains) == 1 and len(domains) == 1:
+        return matched_domains[0], "Yes"
+    else:
+        return "", "No"
 
 def process_description(description):
     query = f"{description} USA"
     try:
         results = list(search(query, num_results=10))
         domains = set(extract_domain(url) for url in results if extract_domain(url))
-        matched = is_exact_match(description, domains)
-        if matched:
-            return matched, "Yes"
-        else:
-            return "", "No"
-    except Exception as e:
+        return is_unique_retailer(description, domains)
+    except Exception:
         return "", "No"
 
 st.title("Retailer Identification via Google Search (Exact Match Logic)")
