@@ -1,15 +1,39 @@
 import streamlit as st
 import pandas as pd
-from urllib.parse import urlparse
 
-def extract_domain(url):
-    try:
-        parsed = urlparse(url)
-        return parsed.netloc.replace("www.", "")
-    except:
-        return ""
+# Predefined known retailer domains
+KNOWN_RETAILERS = {
+    "dollartree.com": "Dollar Tree",
+    "circlek.com": "Circle K",
+    "shell.com": "Shell",
+    "walmart.com": "Walmart",
+    "target.com": "Target",
+    "dollargeneral.com": "Dollar General",
+    "7-eleven.com": "7-Eleven",
+    "costco.com": "Costco",
+    "amazon.com": "Amazon",
+    "kroger.com": "Kroger",
+    "walgreens.com": "Walgreens",
+    "cvs.com": "CVS",
+    "aldi.us": "Aldi",
+    "riteaid.com": "Rite Aid",
+    "publix.com": "Publix",
+    "bestbuy.com": "Best Buy",
+    "lowes.com": "Lowe's",
+    "homedepot.com": "Home Depot"
+}
 
-st.title("Manual Retailer Identification via Google Search")
+def clean_description(desc):
+    return desc.lower().replace(" ", "").replace("-", "").replace(".", "")
+
+def match_retailer(cleaned_desc):
+    matched = [domain for domain in KNOWN_RETAILERS if cleaned_desc in domain.replace(".", "").lower()]
+    if len(matched) == 1:
+        return matched[0], "Yes"
+    else:
+        return "", "No"
+
+st.title("Retailer Identification via Description Matching")
 
 uploaded_file = st.file_uploader("Upload a CSV or Excel file with a 'Description' column", type=["csv", "xlsx"])
 
@@ -22,24 +46,15 @@ if uploaded_file:
     if "Description" not in df.columns:
         st.error("The file must contain a 'Description' column.")
     else:
-        st.write("Step 1: Manually search each description on Google and paste the top result URL below.")
-
-        urls = []
-        for i, desc in enumerate(df["Description"]):
-            url = st.text_input(f"Top Google result for '{desc}'", key=f"url_{i}")
-            urls.append(url)
-
+        st.write("Processing descriptions...")
         retailer_names = []
         statuses = []
 
-        for url in urls:
-            domain = extract_domain(url)
-            if domain:
-                retailer_names.append(domain)
-                statuses.append("Yes")
-            else:
-                retailer_names.append("")
-                statuses.append("No")
+        for desc in df["Description"]:
+            cleaned = clean_description(str(desc))
+            retailer, status = match_retailer(cleaned)
+            retailer_names.append(retailer)
+            statuses.append(status)
 
         df["Retailer Name"] = retailer_names
         df["Status"] = statuses
