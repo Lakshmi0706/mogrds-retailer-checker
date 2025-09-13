@@ -1,56 +1,58 @@
+# streamlit_app.py
+
 import streamlit as st
 import pandas as pd
+from googlesearch import search
 from urllib.parse import urlparse
-import requests
 
-# Function to perform Google search using SerpAPI
-def search_google(description, api_key):
+def get_unique_domain(description):
     query = f"{description} USA"
-    params = {
-        "q": query,
-        "location": "United States",
-        "api_key": api_key,
-        "engine": "google"
-    }
-    response = requests.get("https://serpapi.com/search", params=params)
-    data = response.json()
-    links = [result['link'] for result in data.get("organic_results", [])]
-    return links
+    try:
+        results = list(search(query, num_results=10))
+        domains = set()
+        for url in results:
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            if domain:
+                domains.add(domain)
+        if len(domains) == 1:
+            return list(domains)[0], "Yes"
+        else:
+            return "", "No"
+    except Exception as e:
+        return "", "No"
 
-# Function to extract unique retailer domains
-def get_unique_domain(links):
-    domains = set(urlparse(link).netloc for link in links)
-    retailer_domains = [d for d in domains if "amazon" not in d and "wikipedia" not in d and d]
-    return retailer_domains
+st.title("Retailer Identification via Google Search (No API)")
+uploaded_file = st.file_uploader("Upload a CSV or Excel file with a 'Description' column", type=["csv", "xlsx"])
 
-# Streamlit UI
-st.title("Retailer Uniqueness Checker")
-
-api_key = st.text_input("Enter your SerpAPI Key")
-
-uploaded_file = st.file_uploader("Upload your description file (CSV with 'description' column)", type=["csv"])
-
-if uploaded_file and api_key:
-    df = pd.read_csv(uploaded_file)
-    if 'description' not in df.columns:
-        st.error("CSV must contain a 'description' column.")
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
     else:
-        results = []
-        for desc in df['description']:
-            links = search_google(desc, api_key)
-            unique_domains = get_unique_domain(links)
-            if len(unique_domains) == 1:
-                results.append({"retailer": unique_domains[0], "status": "Yes"})
-            else:
-                results.append({"retailer": "", "status": "No"})
-        
-        df_result = df.copy()
-        df_result["retailer"] = [r["retailer"] for r in results]
-        df_result["status"] = [r["status"] for r in results]
+        df = pd.read_excel(uploaded_file)
 
-        st.dataframe(df_result)
+    if "Description" not in df.columns:
+        st.error("The file must contain a 'Description' column.")
+    else:
+        st.write("Processing descriptions...")
+        retailer_names = []
+        statuses = []
 
-        csv = df_result.to_csv(index=False).encode('utf-8')
-        st.download_button("Download Results", csv, "retailer_results.csv", "text/csv")
-else:
-    st.info("Please upload a file and enter your SerpAPI key to proceed.")
+        for desc in df["Description"]:
+            retailer, status = get_unique_domain(desc)
+            retailer_names.append(retailer)
+            statuses.append(status)
+
+        df["Retailer Name"] = retailer_names
+        df["Status"] = statuses
+
+        st.success("Processing complete!")
+        st.dataframe(df)
+
+        # Download button
+        @st.cache_data
+        def convert_df(df):
+            return df.to_csv(index=False).encode("utf-8")
+
+        csv = convert_df(df)
+        st.download_button("Download Updated File", csv, "updated_results.csv", "text/csv")
