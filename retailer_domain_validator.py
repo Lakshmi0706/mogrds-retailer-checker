@@ -37,16 +37,12 @@ def query_serpapi(description, api_key):
         if not retailer_name and title:
             retailer_name = clean_title(title)
 
-    if len(domains) == 1:
-        return retailer_name or "", "Yes"
-    else:
-        return retailer_name or "", "No"
+    return domains, retailer_name or ""
 
 # Streamlit UI
-st.title("Retailer Identification App using SerpAPI")
+st.title("Retailer Domain Validator")
 
 api_key = st.text_input("Enter your SerpAPI API Key", type="password")
-
 uploaded_file = st.file_uploader("Upload CSV file with 'description' column", type=["csv"])
 
 if uploaded_file and api_key:
@@ -56,12 +52,13 @@ if uploaded_file and api_key:
     else:
         results = []
         for desc in df["description"]:
-            retailer, status = query_serpapi(desc, api_key)
+            domains, retailer = query_serpapi(desc, api_key)
+            status = "Yes" if len(domains) == 1 else "No"
             results.append({"description": desc, "retailer": retailer, "status": status})
         result_df = pd.DataFrame(results)
         st.success("Processing complete.")
         st.dataframe(result_df)
 
-        # Download button
         csv = result_df.to_csv(index=False).encode("utf-8")
         st.download_button("Download Results CSV", csv, "retailer_results.csv", "text/csv")
+
