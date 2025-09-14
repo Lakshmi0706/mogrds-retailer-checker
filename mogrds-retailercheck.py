@@ -1,59 +1,53 @@
-import requests
-from bs4 import BeautifulSoup
+import streamlit as st
 import pandas as pd
-import time
+import requests
+from urllib.parse import urlparse
+from io import BytesIO
 
-# List of descriptions
-descriptions = [
-    "SHELL FILL UP",
-    "E&H ACE RICHMOND HTS E&H ACE HARDWARE",
-    "THE HOME DRPCC",
-    "98 GAS N GO BUENA"
-]
+st.title("Retailer Search Validator")
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-}
+uploaded_file = st.file_uploader("Upload a file containing descriptions", type=["csv", "xlsx"])
+api_key = st.text_input("Enter your SerpAPI key")
 
-def get_domains_from_google(query):
-    url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
-    links = soup.find_all("a")
-
-    domains = set()
-    for link in links:
-        href = link.get("href")
-        if href and "/url?q=" in href:
-            try:
-                domain = href.split("/url?q=")[1].split("&")[0].split("/")[2]
-                domains.add(domain)
-            except IndexError:
-                continue
-    return domains
-
-results = []
-
-for desc in descriptions:
-    query = f"{desc} USA"
-    print(f"Searching for: {query}")
-    domains = get_domains_from_google(query)
-    time.sleep(2)  # polite delay to avoid being blocked
-
-    if len(domains) == 1:
-        retailer_name = list(domains)[0]
-        status = "Yes"
+if uploaded_file and api_key:
+    if uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
     else:
-        retailer_name = ", ".join(domains)
-        status = "No"
+        df = pd.read_excel(uploaded_file, engine='openpyxl')
 
-    results.append({
-        "Description": desc,
-        "Retailer Name": retailer_name,
-        "Status": status
-    })
+    if 'description' not in df.columns:
+        st.error("The uploaded file must contain a column named 'description'.")
+    else:
+        df['retailer'] = ''
+        df['status'] = ''
 
-# Save to CSV
-df = pd.DataFrame(results)
-df.to_csv("retailer_results.csv", index=False)
-print("Results saved to retailer_results.csv")
+        for i, desc in enumerate(df['description']):
+            query = f"{desc} USA"
+            params = {
+                "engine": "google",
+                "q": query,
+                "api_key": api_key
+            }
+            response = requests.get("https://serpapi.com/search", params=params)
+            data = response.json()
+
+            domains = set()
+            if "organic_results" in data:
+                for result in data["organic_results"]:
+                    if "link" in result:
+                        domain = urlparse(result["link"]).netloc
+                        domains.add(domain)
+
+            if len(domains) == 1:
+                df.at[i, 'retailer'] = list(domains)[0]
+                df.at[i, 'status'] = 'Yes'
+            else:
+                df.at[i, 'retailer'] = ', '.join(domains)
+                df.at[i, 'status'] = 'No'
+
+        st.write("Updated Data:")
+        st.dataframe(df)
+
+        output = BytesIO()
+        df.to_csv(output, index=False)
+        st.download_button("Download Updated CSV", output.getvalue(), file_name="updated_data.csv", mime="text/csv")
